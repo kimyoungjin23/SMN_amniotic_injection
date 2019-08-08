@@ -1,0 +1,105 @@
+---
+title: "survival"
+author: "YJ"
+date: "August 1, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+P values are calculated 
+```{r data processing}
+library(tidyverse)
+dir<-file.path("C:/Users/My computer/Dropbox/CSHL/R/SMN_amniotic_injection")
+km<-read_csv(file.path(dir,"Kaplan-Meier_analysis.csv"))
+pvals<-filter(km, Category == "P value")
+grep("<",pvals$values) # find which ones have "<"
+pvals$values<-as.numeric(sub("< ","", pvals$values)) # find which ones have "< " and remove it
+
+pvals<- pvals %>% mutate(p.adj = round(p.adjust(pvals$values,"BH"),6), signif = p.adjust(pvals$values,"BH")<0.05) # test which pvals are FDR<0.05
+
+pvals %>% mutate(p.adj = round(p.adjust(pvals$values,"bonferroni"),6), signif = p.adjust(pvals$values,"bonferroni")<0.05)
+
+pvals<-pvals%>%mutate(comparisons = paste(pvals$ASO1, "vs.", pvals$ASO2))
+pvals[,c("comparisons", "Tests", "values","p.adj")]
+```
+Which comparison pairs are signficant?
+```{r finally summarize which comparisons are significant}
+table(pvals$comparisons, pvals$signif)
+```
+Look at tests separately
+```{r}
+table(pvals$comparisons, pvals$signif, pvals$Tests)
+```
+
+Cox Proportional hazard analysis (http://www.sthda.com/english/wiki/cox-proportional-hazards-model)
+(https://cran.r-project.org/web/packages/survivalAnalysis/vignettes/multivariate.html)
+first, install the necessary packages
+install.packages(c("survival", "survminer"))
+
+Load the packages
+```{r}
+library(survival)
+library(survminer)
+```
+load the data sets and set treatment levels
+```{r}
+df<- read_csv(file.path(dir, "Cox_PH_amniotic_injection_wo_dummy.csv"))
+df$sex_M1F2<-factor(df$sex_M1F2, levels = c(1,2))
+df$Tx<-factor(df$Tx, levels = unique(df$Tx))
+```
+
+univariate cox regression
+```{r}
+res.cox<-coxph(Surv(time, status)~ sex_M1F2, data = df)
+res.cox
+res.cox<-coxph(Surv(time, status)~ Tx , data = df)
+res.cox
+```
+
+cox with multiple covariates (not multivariate)
+```{r , include= FALSE}
+covariates <-colnames(df)[c(3,6)]
+univ_formulas<-sapply(covariates, 
+                      function(x) as.formula(paste('Surv(time, status)~',x))
+                        )
+univ_models<- lapply(univ_formulas, function (x){coxph(x, data = df)
+  
+}
+  )
+
+# Extract data 
+univ_results <- lapply(univ_models,
+                       function(x){ 
+                          x <- summary(x)
+                          p.value<-signif(x$wald["pvalue"], digits=2)
+                          wald.test<-signif(x$wald["test"], digits=2)
+                          beta<-signif(x$coef[1,1], digits=2);#coeficient beta
+                          HR <-signif(x$coef[1,2], digits=2);#exp(beta)
+                          HR.confint.lower <- signif(x$conf.int[,"lower .95"], 2)
+                          HR.confint.upper <- signif(x$conf.int[,"upper .95"],2)
+                          HR <- paste0(HR, " (", 
+                                       HR.confint.lower, "-", HR.confint.upper, ")")
+                          res<-c(beta, HR, wald.test, p.value)
+                          names(res)<-c("beta", "HR (95% CI for HR)", "wald.test", 
+                                        "p.value")
+                          return(res)
+                          #return(exp(cbind(coef(x),confint(x))))
+                         })
+univ_results
+#res <- as.data.frame(univ_results, check.names = FALSE)
+#as.data.frame(res)
+```
+
+multivariate cox regression
+```{r}
+res.cox1<-coxph(Surv(time, status)~  sex_M1F2, data = df)
+res.cox2<-coxph(Surv(time, status)~  Tx, data = df)
+summary(res.cox1)
+k2<-summary(res.cox2)
+Hazard.ratio<-k2$coefficients[,"exp(coef)"]
+signif(Hazard.ratio,2)
+```
+
