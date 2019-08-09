@@ -1,12 +1,3 @@
-library(tidyverse)
-library(gplots)
-library(ggplot2)
-dir<-"/Users/youngjinkim/Dropbox/CSHL/R/SMN_amniotic_injection"
-bw<-read_csv(file.path(dir,"bodyweight.csv"))
-bw$Time<-factor(bw$Time, levels = unique(bw$Time))
-bw$ASO_dose<-factor(bw$ASO_dose, levels = unique(bw$ASO_dose))
-p1<-ggplot(data = bw) + geom_boxplot(aes(x=Time , y = Weight, col = ASO_dose))
-p2<-ggplot(data = bw[-372,]) + geom_boxplot(aes(x=Time , y = Tail_length, col = ASO_dose))
 multiplot<-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
   library(grid)
   
@@ -42,4 +33,3 @@ multiplot<-multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) 
     }
   }
 }
-multiplot(p1,p2)
